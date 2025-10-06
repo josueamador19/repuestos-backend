@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles  
-from routers import productos
+from routers import productos, blog, comentarios, contacto
 from db import get_connection
 
 app = FastAPI(title="Repuestos API", version="1.0")
@@ -20,6 +20,9 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Registrar rutas
 app.include_router(productos.router)
+app.include_router(blog.router)
+app.include_router(comentarios.router)
+app.include_router(contacto.router)
 
 @app.get("/")
 def root():
@@ -29,6 +32,6 @@ def root():
         cursor.execute("SELECT @@VERSION;")
         version = cursor.fetchone()
         conn.close()
-        return {"message": "✅ Conectado a SQL Server!", "version": version[0]}
+        return {"message": "Conectado a SQL Server!", "version": version[0]}
     except Exception as e:
         return {"error": str(e)}

@@ -1,15 +1,15 @@
-
-
 IF DB_ID('RepuestosDB') IS NOT NULL
     DROP DATABASE RepuestosDB;
 GO
-
 CREATE DATABASE RepuestosDB;
 GO
-
 USE RepuestosDB;
 GO
 
+IF OBJECT_ID('ComentariosNoticias', 'U') IS NOT NULL DROP TABLE ComentariosNoticias;
+IF OBJECT_ID('Noticias', 'U') IS NOT NULL DROP TABLE Noticias;
+IF OBJECT_ID('ContactMessages', 'U') IS NOT NULL DROP TABLE ContactMessages;
+IF OBJECT_ID('ContactInfo', 'U') IS NOT NULL DROP TABLE ContactInfo;
 IF OBJECT_ID('DetallePedido', 'U') IS NOT NULL DROP TABLE DetallePedido;
 IF OBJECT_ID('Facturas', 'U') IS NOT NULL DROP TABLE Facturas;
 IF OBJECT_ID('Pedidos', 'U') IS NOT NULL DROP TABLE Pedidos;
@@ -18,21 +18,13 @@ IF OBJECT_ID('DireccionesEnvio', 'U') IS NOT NULL DROP TABLE DireccionesEnvio;
 IF OBJECT_ID('Usuarios', 'U') IS NOT NULL DROP TABLE Usuarios;
 IF OBJECT_ID('MetodosPago', 'U') IS NOT NULL DROP TABLE MetodosPago;
 IF OBJECT_ID('Roles', 'U') IS NOT NULL DROP TABLE Roles;
-IF OBJECT_ID('FAQ', 'U') IS NOT NULL DROP TABLE FAQ;
-IF OBJECT_ID('Politicas', 'U') IS NOT NULL DROP TABLE Politicas;
 GO
 
--------------------------------------------------
--- CREACIÓN DE TABLAS
--------------------------------------------------
-
--- Roles
 CREATE TABLE Roles (
     RolID INT IDENTITY(1,1) PRIMARY KEY,
     NombreRol NVARCHAR(50) NOT NULL
 );
 
---Usuarios
 CREATE TABLE Usuarios (
     UsuarioID INT IDENTITY(1,1) PRIMARY KEY,
     Nombre NVARCHAR(100) NOT NULL,
@@ -43,7 +35,6 @@ CREATE TABLE Usuarios (
     FOREIGN KEY (RolID) REFERENCES Roles(RolID)
 );
 
---Direcciones
 CREATE TABLE DireccionesEnvio (
     DireccionID INT IDENTITY(1,1) PRIMARY KEY,
     UsuarioID INT NOT NULL,
@@ -54,13 +45,11 @@ CREATE TABLE DireccionesEnvio (
     FOREIGN KEY (UsuarioID) REFERENCES Usuarios(UsuarioID)
 );
 
---MetodosPago
 CREATE TABLE MetodosPago (
     MetodoPagoID INT IDENTITY(1,1) PRIMARY KEY,
     Metodo NVARCHAR(50) NOT NULL
 );
 
--- Productos
 CREATE TABLE Productos (
     ProductoID INT IDENTITY(1,1) PRIMARY KEY,
     NombreProducto NVARCHAR(100) NOT NULL,
@@ -71,7 +60,6 @@ CREATE TABLE Productos (
     ImagenURL NVARCHAR(255)
 );
 
--- Pedidos
 CREATE TABLE Pedidos (
     PedidoID INT IDENTITY(1,1) PRIMARY KEY,
     UsuarioID INT NOT NULL,
@@ -84,7 +72,6 @@ CREATE TABLE Pedidos (
     FOREIGN KEY (MetodoPagoID) REFERENCES MetodosPago(MetodoPagoID)
 );
 
--- Detalles del Pedido
 CREATE TABLE DetallePedido (
     DetalleID INT IDENTITY(1,1) PRIMARY KEY,
     PedidoID INT NOT NULL,
@@ -95,7 +82,6 @@ CREATE TABLE DetallePedido (
     FOREIGN KEY (ProductoID) REFERENCES Productos(ProductoID)
 );
 
--- Facturas
 CREATE TABLE Facturas (
     FacturaID INT IDENTITY(1,1) PRIMARY KEY,
     PedidoID INT NOT NULL,
@@ -107,27 +93,48 @@ CREATE TABLE Facturas (
     FOREIGN KEY (PedidoID) REFERENCES Pedidos(PedidoID)
 );
 
--- Preguntas Frecuentes
-CREATE TABLE FAQ (
-    FAQID INT IDENTITY(1,1) PRIMARY KEY,
-    Pregunta NVARCHAR(255) NOT NULL,
-    Respuesta NVARCHAR(MAX) NOT NULL,
-    Activo BIT DEFAULT 1
+CREATE TABLE ContactInfo (
+    ContactID INT IDENTITY(1,1) PRIMARY KEY,
+    Direccion NVARCHAR(255),
+    Telefono NVARCHAR(20),
+    Correo NVARCHAR(100),
+    Horario NVARCHAR(100),
+    MapaURL NVARCHAR(500)
 );
 
--- Políticas
-CREATE TABLE Politicas (
-    PoliticaID INT IDENTITY(1,1) PRIMARY KEY,
-    Tipo NVARCHAR(50) NOT NULL, -- Ej: 'Devoluciones', 'Privacidad', etc.
+CREATE TABLE ContactMessages (
+    MensajeID INT IDENTITY(1,1) PRIMARY KEY,
+    Nombre NVARCHAR(100),
+    Email NVARCHAR(100),
+    Asunto NVARCHAR(150),
+    Mensaje NVARCHAR(MAX),
+    FechaEnvio DATETIME DEFAULT GETDATE(),
+    Estado NVARCHAR(20) DEFAULT 'Pendiente'
+);
+
+CREATE TABLE Noticias (
+    NoticiaID INT IDENTITY(1,1) PRIMARY KEY,
+    Titulo NVARCHAR(200) NOT NULL,
     Contenido NVARCHAR(MAX) NOT NULL,
-    Activo BIT DEFAULT 1
+    ImagenURL NVARCHAR(255),
+    AutorID INT NULL,
+    FechaPublicacion DATETIME DEFAULT GETDATE(),
+    Categoria NVARCHAR(100),
+    Activo BIT DEFAULT 1,
+    FOREIGN KEY (AutorID) REFERENCES Usuarios(UsuarioID)
+);
+
+CREATE TABLE ComentariosNoticias (
+    ComentarioID INT IDENTITY(1,1) PRIMARY KEY,
+    NoticiaID INT NOT NULL,
+    UsuarioID INT NULL,
+    Contenido NVARCHAR(MAX) NOT NULL,
+    Fecha DATETIME DEFAULT GETDATE(),
+    FOREIGN KEY (NoticiaID) REFERENCES Noticias(NoticiaID),
+    FOREIGN KEY (UsuarioID) REFERENCES Usuarios(UsuarioID)
 );
 GO
 
--------------------------------------------------
--- TRIGGERS
--------------------------------------------------
--- Reducir stock al insertar detalle de pedido
 CREATE TRIGGER trg_ReducirStock
 ON DetallePedido
 AFTER INSERT
@@ -141,26 +148,20 @@ BEGIN
 END;
 GO
 
--- Generar factura automáticamente DESPUÉS de insertar detalles del pedido
 CREATE TRIGGER trg_GenerarFactura
 ON DetallePedido
 AFTER INSERT
 AS
 BEGIN
     SET NOCOUNT ON;
-
     DECLARE @PedidoID INT;
     SELECT @PedidoID = PedidoID FROM inserted;
-
     DECLARE @Subtotal DECIMAL(10,2);
     SELECT @Subtotal = ISNULL(SUM(Cantidad * PrecioUnitario),0)
     FROM DetallePedido
     WHERE PedidoID = @PedidoID;
-
-    DECLARE @Impuesto DECIMAL(10,2) = @Subtotal * 0.15; -- 15% impuesto
+    DECLARE @Impuesto DECIMAL(10,2) = @Subtotal * 0.15;
     DECLARE @Total DECIMAL(10,2) = @Subtotal + @Impuesto;
-
-    -- Insertar factura solo si hay productos en el pedido
     IF @Subtotal > 0
     BEGIN
         INSERT INTO Facturas (PedidoID, Subtotal, Impuesto, Total, Estado)
@@ -169,32 +170,24 @@ BEGIN
 END;
 GO
 
--------------------------------------------------
--- DML INICIAL
--------------------------------------------------
--- Roles
 INSERT INTO Roles (NombreRol) VALUES ('Vendedor'), ('Comprador');
 
--- Usuarios
 INSERT INTO Usuarios (Nombre, Email, PasswordHash, Telefono, RolID) VALUES
 ('Juan Pérez', 'juanperez@repuestos.com', 'hash123', '9999-1111', 1),
 ('Carlos López', 'carlos@gmail.com', 'hash456', '8888-2222', 2),
 ('María García', 'maria@gmail.com', 'hash789', '8777-3333', 2),
 ('Pedro Sánchez', 'pedro@gmail.com', 'hash321', '8666-4444', 2);
 
--- Direcciones
 INSERT INTO DireccionesEnvio (UsuarioID, Direccion, Ciudad, Departamento, CodigoPostal) VALUES
 (2, 'Col. Centro, Calle Principal #123', 'Tegucigalpa', 'Francisco Morazán', '11101'),
 (3, 'Barrio Abajo, Avenida 4', 'San Pedro Sula', 'Cortés', '21101'),
 (4, 'Residencial Los Pinos, Casa #45', 'La Ceiba', 'Atlántida', '31101');
 
--- Métodos de pago
 INSERT INTO MetodosPago (Metodo) VALUES
 ('Tarjeta de Crédito'),
 ('Tarjeta de Débito'),
 ('Efectivo contra entrega');
 
--- Productos (15)
 INSERT INTO Productos (NombreProducto, Descripcion, Precio, Stock, Categoria, ImagenURL) VALUES
 ('Filtro de aceite', 'Filtro de aceite para motor 1.6L', 250.00, 40, 'Filtros', 'filtro_aceite.jpg'),
 ('Filtro de aire', 'Filtro de aire de alto rendimiento', 320.00, 30, 'Filtros', 'filtro_aire.jpg'),
@@ -212,13 +205,11 @@ INSERT INTO Productos (NombreProducto, Descripcion, Precio, Stock, Categoria, Im
 ('Parabrisas delantero', 'Vidrio templado para sedan', 7200.00, 3, 'Carrocería', 'parabrisas.jpg'),
 ('Espejo retrovisor', 'Espejo retrovisor eléctrico izquierdo', 1800.00, 6, 'Carrocería', 'retrovisor.jpg');
 
--- Pedidos
 INSERT INTO Pedidos (UsuarioID, DireccionID, MetodoPagoID, Estado) VALUES
 (2, 1, 1, 'Pendiente'),
 (3, 2, 2, 'Completado'),
 (4, 3, 3, 'Enviado');
 
--- Detalles de pedidos (esto generará automáticamente las facturas)
 INSERT INTO DetallePedido (PedidoID, ProductoID, Cantidad, PrecioUnitario) VALUES
 (1, 1, 2, 250.00),
 (1, 3, 4, 150.00),
@@ -226,17 +217,14 @@ INSERT INTO DetallePedido (PedidoID, ProductoID, Cantidad, PrecioUnitario) VALUE
 (2, 7, 1, 3200.00),
 (3, 8, 3, 450.00);
 
--- FAQ inicial
-INSERT INTO FAQ (Pregunta, Respuesta) VALUES
-('¿Cuánto tarda el envío?', 'El tiempo de entrega es de 2 a 5 días hábiles dependiendo de su ubicación.'),
-('¿Puedo pagar contra entrega?', 'Sí, aceptamos pago en efectivo al momento de la entrega en ciertas ciudades.'),
-('¿Tienen garantía los productos?', 'Sí, todos nuestros repuestos cuentan con garantía de 30 días por defectos de fábrica.');
+INSERT INTO ContactInfo (Direccion, Telefono, Correo, Horario, MapaURL) VALUES
+('Boulevard Fuerzas Armadas, Tegucigalpa, Honduras', '2234-5678', 'contacto@repuestos.com', 'Lunes a Viernes 8:00 AM - 5:00 PM', 'https://maps.google.com/?q=tegucigalpa+honduras');
 
--- Políticas iniciales
-INSERT INTO Politicas (Tipo, Contenido) VALUES
-('Devoluciones y Cambios', 'Las devoluciones se aceptan dentro de los 15 días posteriores a la compra con el producto en su empaque original.'),
-('Envíos', 'Realizamos envíos a todo el país mediante paquetería certificada. El costo depende de la ubicación.'),
-('Privacidad', 'Sus datos personales serán utilizados únicamente para procesar sus pedidos y no serán compartidos con terceros.'),
-('Generales', 'El uso de este sitio web implica la aceptación de nuestras políticas de uso y servicio.'),
-('Garantía', 'Todos los productos cuentan con garantía mínima de 30 días, extensible según el fabricante.');
+INSERT INTO Noticias (Titulo, Contenido, ImagenURL, AutorID, Categoria) VALUES
+('Nuevo lote de filtros disponibles', 'Llegó un nuevo lote de filtros de aire y aceite con descuentos especiales por tiempo limitado.', 'noticia_filtros.jpg', 1, 'Promociones'),
+('Mantenimiento preventivo: la clave para alargar la vida del motor', 'Te compartimos las mejores prácticas para mantener tu motor en óptimo estado y evitar reparaciones costosas.', 'mantenimiento_motor.jpg', 1, 'Consejos');
+
+INSERT INTO ComentariosNoticias (NoticiaID, UsuarioID, Contenido) VALUES
+(1, 2, 'Excelente noticia, justo necesitaba filtros nuevos!'),
+(2, 3, 'Gracias por los consejos, muy útiles.');
 GO
