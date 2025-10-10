@@ -1,8 +1,10 @@
-from fastapi import APIRouter, HTTPException, Form
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 from db import get_connection
+import shutil
+import os
 
 router = APIRouter(prefix="/blog", tags=["Blog"])
-
+UPLOAD_DIR = "static/images"
 # Obtener todas las noticias
 @router.get("/")
 def get_noticias():
@@ -77,9 +79,18 @@ def crear_noticia(
     contenido: str = Form(...),
     AutorID: int = Form(...),
     categoria: str = Form(...),
-    ImagenURL: str = Form(None)
+    imagen: UploadFile = File(None)
 ):
     try:
+        imagen_url = None
+        if imagen:
+        
+            filename = imagen.filename
+            file_path = os.path.join(UPLOAD_DIR, filename)
+            with open(file_path, "wb") as f:
+                shutil.copyfileobj(imagen.file, f)
+            imagen_url = filename  
+
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -87,11 +98,9 @@ def crear_noticia(
             INSERT INTO Noticias (Titulo, Contenido, ImagenURL, AutorID, Categoria, Activo, FechaPublicacion)
             VALUES (?, ?, ?, ?, ?, 1, GETDATE())
             """,
-            (titulo, contenido, ImagenURL, AutorID, categoria)
+            (titulo, contenido, imagen_url, AutorID, categoria)
         )
         conn.commit()
         return {"message": "✅ Noticia creada correctamente"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al crear noticia: {str(e)}")
     finally:
         conn.close()

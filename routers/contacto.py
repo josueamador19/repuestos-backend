@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Form
 from db import get_connection
+from datetime import datetime
 
 router = APIRouter(prefix="/contacto", tags=["Contacto"])
 
@@ -25,15 +26,30 @@ def get_contact_info():
 
 # Guardar mensaje del formulario de contacto
 @router.post("/mensaje")
-def send_contact_message(nombre: str = Form(...), email: str = Form(...), asunto: str = Form(...), mensaje: str = Form(...)):
+def send_contact_message(
+    nombre: str = Form(...),
+    email: str = Form(...),
+    asunto: str = Form(...),
+    mensaje: str = Form(...)
+):
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO ContactMessages (Nombre, Email, Asunto, Mensaje) VALUES (?, ?, ?, ?)",
-            (nombre, email, asunto, mensaje)
-        )
+
+        fecha_envio = datetime.now()
+        estado = "Pendiente"
+
+        cursor.execute("""
+            INSERT INTO ContactMessages (Nombre, Email, Asunto, Mensaje, FechaEnvio, Estado)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (nombre, email, asunto, mensaje, fecha_envio, estado))
         conn.commit()
-        return {"message": " Mensaje enviado correctamente"}
+
+        return {"message": "Mensaje enviado correctamente"}
+
+    except Exception as e:
+        print("Error al guardar mensaje:", e)
+        raise HTTPException(status_code=500, detail="Error al guardar el mensaje")
+
     finally:
         conn.close()
