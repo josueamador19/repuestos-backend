@@ -2,6 +2,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles  
 from routers import productos, blog, comentarios, contacto
+from routers import productos
+from routers import login
+from routers.pedido import router_pedidos 
+
+
 from db import get_connection
 
 app = FastAPI(title="Repuestos API", version="1.0")
@@ -15,14 +20,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Montar carpeta de imágenes estáticas
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# Registrar rutas
 app.include_router(productos.router)
 app.include_router(blog.router)
 app.include_router(comentarios.router)
 app.include_router(contacto.router)
+app.include_router(router_pedidos)
+app.include_router(login.router)
 
 @app.get("/")
 def root():
