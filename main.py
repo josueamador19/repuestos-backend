@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles  
-from routers import productos, blog, comentarios, contacto
+from routers import productos, blog, comentarios, contacto, faq, politicas
 from routers import productos
 from routers import login
 from routers.pedido import router_pedidos 
@@ -27,6 +27,9 @@ app.include_router(comentarios.router)
 app.include_router(contacto.router)
 app.include_router(router_pedidos)
 app.include_router(login.router)
+app.include_router(politicas.router)
+app.include_router(faq.router)
+
 
 @app.get("/")
 def root():
