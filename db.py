@@ -36,5 +36,5 @@ def get_connection():
         conn = pyodbc.connect(connection_string)
         return conn
     except Exception as e:
-        print("❌ Error al conectar:", e)
+        print(" Error al conectar:", e)
         raise e
