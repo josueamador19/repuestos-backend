@@ -14,7 +14,8 @@ app = FastAPI(title="Repuestos API", version="1.0")
 # Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  
+    allow_origins=["http://localhost:5173", 
+                  "https://repuestosexpress.vercel.app/"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
