@@ -43,7 +43,7 @@ def create_politica(politica: PoliticaCreate):
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO Politicas (Tipo, Contenido) OUTPUT INSERTED.PoliticaID, INSERTED.Activo VALUES (?, ?)",
+            "INSERT INTO Politicas (Tipo, Contenido) OUTPUT INSERTED.PoliticaID, INSERTED.Activo VALUES ($s, $s)",
             (politica.Tipo, politica.Contenido)
         )
         inserted = cursor.fetchone()

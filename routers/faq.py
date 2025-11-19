@@ -52,7 +52,7 @@ def create_faq(faq: FAQCreate):
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO FAQ (Pregunta, Respuesta, Activo) OUTPUT INSERTED.FAQID VALUES (?, ?, ?)",
+            "INSERT INTO FAQ (Pregunta, Respuesta, Activo) OUTPUT INSERTED.FAQID VALUES ($s, $s, $s)",
             (faq.Pregunta, faq.Respuesta, int(faq.Activo))
         )
         faq_id = cursor.fetchone()[0]

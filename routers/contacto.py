@@ -41,7 +41,7 @@ def send_contact_message(
 
         cursor.execute("""
             INSERT INTO ContactMessages (Nombre, Email, Asunto, Mensaje, FechaEnvio, Estado)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES ($s, $s, $s, $s, $s, $s)
         """, (nombre, email, asunto, mensaje, fecha_envio, estado))
         conn.commit()
 
