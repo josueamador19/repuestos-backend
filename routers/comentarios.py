@@ -10,16 +10,19 @@ def get_comentarios(noticia_id: int):
     try:
         conn = get_connection()
         cursor = conn.cursor()
+
         cursor.execute(
             """
             SELECT ComentarioID, NoticiaID, UsuarioID, Contenido, Fecha
             FROM ComentariosNoticias
-            WHERE NoticiaID = ?
+            WHERE NoticiaID = %s
             ORDER BY Fecha ASC
             """,
             (noticia_id,)
         )
+
         rows = cursor.fetchall()
+
         comentarios = [
             {
                 "id": row[0],
@@ -30,9 +33,12 @@ def get_comentarios(noticia_id: int):
             }
             for row in rows
         ]
+
         return comentarios
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener comentarios: {str(e)}")
+
     finally:
         conn.close()
 
@@ -47,11 +53,12 @@ def crear_comentario(
     try:
         conn = get_connection()
         cursor = conn.cursor()
+
         # Insertar comentario
         cursor.execute(
             """
             INSERT INTO ComentariosNoticias (NoticiaID, UsuarioID, Contenido, Fecha)
-            VALUES (?, ?, ?, GETDATE())
+            VALUES (%s, %s, %s, GETDATE())
             """,
             (noticia_id, usuario_id, contenido)
         )
@@ -59,10 +66,17 @@ def crear_comentario(
 
         # Obtener el último comentario insertado
         cursor.execute(
-            "SELECT TOP 1 ComentarioID, NoticiaID, UsuarioID, Contenido, Fecha FROM ComentariosNoticias WHERE NoticiaID = ? ORDER BY Fecha DESC",
+            """
+            SELECT TOP 1 ComentarioID, NoticiaID, UsuarioID, Contenido, Fecha
+            FROM ComentariosNoticias
+            WHERE NoticiaID = %s
+            ORDER BY Fecha DESC
+            """,
             (noticia_id,)
         )
+
         row = cursor.fetchone()
+
         return {
             "id": row[0],
             "noticia_id": row[1],
@@ -73,5 +87,6 @@ def crear_comentario(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al agregar comentario: {str(e)}")
+
     finally:
         conn.close()

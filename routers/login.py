@@ -14,20 +14,22 @@ class RegisterRequest(BaseModel):
     password: str
     telefono: str
 
+
 @router.post("/login")
 def login(login_data: LoginRequest):
     conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute("""
             SELECT UsuarioID, Nombre, Email, RolID
             FROM Usuarios
-            WHERE Email = ? AND PasswordHash = ?
+            WHERE Email = %s AND PasswordHash = %s
         """, (login_data.email, login_data.password))
-        
+
         user = cursor.fetchone()
+
         if user:
             return {
                 "usuario_id": user[0],
@@ -38,7 +40,7 @@ def login(login_data: LoginRequest):
             }
         else:
             raise HTTPException(status_code=401, detail="Credenciales incorrectas")
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -47,31 +49,38 @@ def login(login_data: LoginRequest):
         if conn:
             conn.close()
 
+
 @router.post("/register")
 def register(register_data: RegisterRequest):
     conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        
-        cursor.execute("SELECT UsuarioID FROM Usuarios WHERE Email = ?", (register_data.email,))
+
+        # Comprobar si el email ya existe
+        cursor.execute(
+            "SELECT UsuarioID FROM Usuarios WHERE Email = %s",
+            (register_data.email,)
+        )
+
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="El email ya está registrado")
-        
+
+        # Insertar nuevo usuario
         cursor.execute("""
             INSERT INTO Usuarios (Nombre, Email, PasswordHash, Telefono, RolID)
             OUTPUT INSERTED.UsuarioID
-            VALUES (?, ?, ?, ?, 2)
+            VALUES (%s, %s, %s, %s, 2)
         """, (register_data.nombre, register_data.email, register_data.password, register_data.telefono))
-        
+
         user_id = cursor.fetchone()[0]
         conn.commit()
-        
+
         return {
             "usuario_id": user_id,
             "mensaje": "Usuario registrado exitosamente"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
