@@ -25,8 +25,8 @@ RUN pip install -r requirements.txt
 # Copiar todo el código
 COPY . .
 
-# Exponer puerto
+# Exponer puerto (Render/Cloud Run asigna $PORT)
 EXPOSE 10000
 
 # Comando de inicio
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:10000"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "10000"]
