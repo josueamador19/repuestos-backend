@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form 
 from db import get_connection
 import shutil
 import os
@@ -9,10 +9,9 @@ UPLOAD_DIR = "static/images"
 # Obtener todas las noticias
 @router.get("/")
 def get_noticias():
+    conn = get_connection()
     try:
-        conn = get_connection()
         cursor = conn.cursor()
-
         cursor.execute("""
             SELECT n.NoticiaID, n.Titulo, n.Contenido, n.ImagenURL,
                 u.Nombre AS Autor, n.FechaPublicacion, n.Categoria
@@ -21,7 +20,6 @@ def get_noticias():
             WHERE n.Activo = 1
             ORDER BY n.FechaPublicacion DESC
         """)
-
         rows = cursor.fetchall()
 
         noticias = [
@@ -29,7 +27,7 @@ def get_noticias():
                 "id": row[0],
                 "titulo": row[1],
                 "contenido": row[2],
-                "imagen_url": row[3],
+                "imagen_url": row[3] if row[3] else None,
                 "autor": row[4],
                 "fecha": row[5],
                 "categoria": row[6]
@@ -40,7 +38,6 @@ def get_noticias():
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener noticias: {str(e)}")
-    
     finally:
         conn.close()
 
@@ -48,10 +45,9 @@ def get_noticias():
 # Obtener noticia por ID
 @router.get("/{noticia_id}")
 def get_noticia(noticia_id: int):
+    conn = get_connection()
     try:
-        conn = get_connection()
         cursor = conn.cursor()
-
         cursor.execute("""
             SELECT n.NoticiaID, n.Titulo, n.Contenido, n.ImagenURL,
                 u.Nombre AS Autor, n.FechaPublicacion, n.Categoria
@@ -59,7 +55,6 @@ def get_noticia(noticia_id: int):
             LEFT JOIN Usuarios u ON n.AutorID = u.UsuarioID
             WHERE n.NoticiaID = %s AND n.Activo = 1
         """, (noticia_id,))
-
         row = cursor.fetchone()
 
         if not row:
@@ -69,7 +64,7 @@ def get_noticia(noticia_id: int):
             "id": row[0],
             "titulo": row[1],
             "contenido": row[2],
-            "imagen_url": row[3],
+            "imagen_url": row[3] if row[3] else None,
             "autor": row[4],
             "fecha": row[5],
             "categoria": row[6]
@@ -78,7 +73,6 @@ def get_noticia(noticia_id: int):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener noticia: {str(e)}")
-    
     finally:
         conn.close()
 
@@ -92,6 +86,7 @@ def crear_noticia(
     categoria: str = Form(...),
     imagen: UploadFile = File(None)
 ):
+    conn = get_connection()
     try:
         imagen_url = None
 
@@ -102,11 +97,10 @@ def crear_noticia(
             with open(file_path, "wb") as f:
                 shutil.copyfileobj(imagen.file, f)
 
+
             imagen_url = filename
 
-        conn = get_connection()
         cursor = conn.cursor()
-
         cursor.execute("""
             INSERT INTO Noticias (Titulo, Contenido, ImagenURL, AutorID, Categoria, Activo, FechaPublicacion)
             VALUES (%s, %s, %s, %s, %s, 1, GETDATE())
@@ -117,6 +111,5 @@ def crear_noticia(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al crear noticia: " + str(e))
-
     finally:
         conn.close()
