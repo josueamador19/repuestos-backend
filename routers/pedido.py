@@ -49,13 +49,14 @@ def crear_pedido_invitado(pedido: PedidoInvitadoCreate):
         conn = get_connection()
         cursor = conn.cursor()
 
-        # Buscar usuario invitado
-        cursor.execute("SELECT UsuarioID FROM Usuarios WHERE Email = 'invitado@temp.com'")
+        # Usuario invitado fijo ID = 5
+        cursor.execute("SELECT UsuarioID FROM Usuarios WHERE UsuarioID = 5")
         result = cursor.fetchone()
 
         if result:
             usuario_id = result[0]
         else:
+            # (Solo en caso de no existir)
             cursor.execute("""
                 INSERT INTO Usuarios (Nombre, Email, PasswordHash, Telefono, RolID)
                 OUTPUT INSERTED.UsuarioID
@@ -71,39 +72,36 @@ def crear_pedido_invitado(pedido: PedidoInvitadoCreate):
         """, (usuario_id, pedido.direccion, pedido.ciudad, pedido.departamento, pedido.codigo_postal))
         direccion_id = cursor.fetchone()[0]
 
-        # Crear pedido
+        # Crear pedido (CORREGIDO: sin EmailInvitado)
         cursor.execute("""
-            INSERT INTO Pedidos (UsuarioID, DireccionID, MetodoPagoID, Estado, EmailInvitado)
+            INSERT INTO Pedidos (UsuarioID, DireccionID, MetodoPagoID, Estado)
             OUTPUT INSERTED.PedidoID
-            VALUES (%s, %s, %s, 'Pendiente', %s)
-        """, (usuario_id, direccion_id, pedido.metodo_pago_id, pedido.email))
+            VALUES (%s, %s, %s, 'Pendiente')
+        """, (usuario_id, direccion_id, pedido.metodo_pago_id))
         pedido_id = cursor.fetchone()[0]
 
-        # Detalle del pedido y actualización de stock
+        # Detalle del pedido y stock
         for producto in pedido.productos:
-            # Verificar stock disponible
             cursor.execute("SELECT Stock FROM Productos WHERE ProductoID = %s", (producto.producto_id,))
             stock_actual = cursor.fetchone()[0]
+
             if stock_actual < producto.cantidad:
                 raise HTTPException(
                     status_code=400,
                     detail=f"No hay suficiente stock para el producto {producto.producto_id} (Disponible: {stock_actual})"
                 )
 
-            # Insertar detalle del pedido
             cursor.execute("""
                 INSERT INTO DetallePedido (PedidoID, ProductoID, Cantidad, PrecioUnitario)
                 VALUES (%s, %s, %s, %s)
             """, (pedido_id, producto.producto_id, producto.cantidad, producto.precio_unitario))
 
-            # Disminuir stock en la tabla Productos
             cursor.execute("""
                 UPDATE Productos
                 SET Stock = Stock - %s
                 WHERE ProductoID = %s
             """, (producto.cantidad, producto.producto_id))
 
-        # Confirmar transacción
         conn.commit()
 
         return {
