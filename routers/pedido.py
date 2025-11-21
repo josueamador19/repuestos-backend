@@ -79,13 +79,31 @@ def crear_pedido_invitado(pedido: PedidoInvitadoCreate):
         """, (usuario_id, direccion_id, pedido.metodo_pago_id, pedido.email))
         pedido_id = cursor.fetchone()[0]
 
-        # Detalle del pedido
+        # Detalle del pedido y actualización de stock
         for producto in pedido.productos:
+            # Verificar stock disponible
+            cursor.execute("SELECT Stock FROM Productos WHERE ProductoID = %s", (producto.producto_id,))
+            stock_actual = cursor.fetchone()[0]
+            if stock_actual < producto.cantidad:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No hay suficiente stock para el producto {producto.producto_id} (Disponible: {stock_actual})"
+                )
+
+            # Insertar detalle del pedido
             cursor.execute("""
                 INSERT INTO DetallePedido (PedidoID, ProductoID, Cantidad, PrecioUnitario)
                 VALUES (%s, %s, %s, %s)
             """, (pedido_id, producto.producto_id, producto.cantidad, producto.precio_unitario))
 
+            # Disminuir stock en la tabla Productos
+            cursor.execute("""
+                UPDATE Productos
+                SET Stock = Stock - %s
+                WHERE ProductoID = %s
+            """, (producto.cantidad, producto.producto_id))
+
+        # Confirmar transacción
         conn.commit()
 
         return {
@@ -113,6 +131,7 @@ def crear_pedido_usuario(pedido: PedidoUsuarioCreate):
         conn = get_connection()
         cursor = conn.cursor()
 
+       
         cursor.execute("""
             INSERT INTO Pedidos (UsuarioID, DireccionID, MetodoPagoID, Estado)
             OUTPUT INSERTED.PedidoID
@@ -120,13 +139,31 @@ def crear_pedido_usuario(pedido: PedidoUsuarioCreate):
         """, (pedido.usuario_id, pedido.direccion_id, pedido.metodo_pago_id))
         pedido_id = cursor.fetchone()[0]
 
-        # Detalle del pedido
+    
         for producto in pedido.productos:
+            
+            cursor.execute("SELECT Stock FROM Productos WHERE ProductoID = %s", (producto.producto_id,))
+            stock_actual = cursor.fetchone()[0]
+            if stock_actual < producto.cantidad:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No hay suficiente stock para el producto {producto.producto_id} (Disponible: {stock_actual})"
+                )
+
+       
             cursor.execute("""
                 INSERT INTO DetallePedido (PedidoID, ProductoID, Cantidad, PrecioUnitario)
                 VALUES (%s, %s, %s, %s)
             """, (pedido_id, producto.producto_id, producto.cantidad, producto.precio_unitario))
 
+         
+            cursor.execute("""
+                UPDATE Productos
+                SET Stock = Stock - %s
+                WHERE ProductoID = %s
+            """, (producto.cantidad, producto.producto_id))
+
+       
         conn.commit()
 
         return {
@@ -144,6 +181,7 @@ def crear_pedido_usuario(pedido: PedidoUsuarioCreate):
             conn.close()
 
 
+
 # -------------------------------
 # PEDIDOS POR USUARIO
 # -------------------------------
@@ -154,22 +192,45 @@ def obtener_pedidos_usuario(usuario_id: int):
         conn = get_connection()
         cursor = conn.cursor()
 
+      
         cursor.execute("""
-            SELECT p.PedidoID, p.FechaPedido, p.Estado, 
-                   ISNULL(f.Total, 0) as Total
-            FROM Pedidos p
-            LEFT JOIN Facturas f ON p.PedidoID = f.PedidoID
-            WHERE p.UsuarioID = %s
-            ORDER BY p.FechaPedido DESC
+            SELECT PedidoID, FechaPedido, Estado
+            FROM Pedidos
+            WHERE UsuarioID = %s
+            ORDER BY FechaPedido DESC
         """, (usuario_id,))
 
         pedidos = []
         for row in cursor.fetchall():
+            pedido_id = row[0]
+
+            
+            cursor.execute("""
+                SELECT SUM(Cantidad * PrecioUnitario)
+                FROM DetallePedido
+                WHERE PedidoID = %s
+            """, (pedido_id,))
+            subtotal = cursor.fetchone()[0] or 0
+
+            
+            subtotal = float(subtotal)
+
+            
+            impuesto = subtotal * 0.15
+
+            envio = 100.0
+
+           
+            total = subtotal + impuesto + envio
+
             pedidos.append({
-                "pedido_id": row[0],
+                "pedido_id": pedido_id,
                 "fecha_pedido": row[1].isoformat() if row[1] else None,
                 "estado": row[2],
-                "total": float(row[3])
+                "subtotal": subtotal,
+                "impuesto": impuesto,
+                "envio": envio,
+                "total": total
             })
 
         return {"pedidos": pedidos}
@@ -179,7 +240,6 @@ def obtener_pedidos_usuario(usuario_id: int):
     finally:
         if conn:
             conn.close()
-
 
 # -------------------------------
 # CREAR DIRECCIÓN
@@ -224,7 +284,6 @@ def obtener_detalle_pedido(pedido_id: int):
         conn = get_connection()
         cursor = conn.cursor()
 
-        # Información del pedido
         cursor.execute("""
             SELECT p.PedidoID, p.FechaPedido, p.Estado, mp.Metodo,
                    d.Direccion, d.Ciudad, d.Departamento,
@@ -240,7 +299,7 @@ def obtener_detalle_pedido(pedido_id: int):
         if not pedido_info:
             raise HTTPException(status_code=404, detail="Pedido no encontrado")
 
-        # Productos del pedido
+
         cursor.execute("""
             SELECT p.NombreProducto, dp.Cantidad, dp.PrecioUnitario,
                    (dp.Cantidad * dp.PrecioUnitario) as Total,
@@ -251,31 +310,32 @@ def obtener_detalle_pedido(pedido_id: int):
         """, (pedido_id,))
 
         productos = []
+        subtotal = 0.0
         for row in cursor.fetchall():
+            cantidad = row[1]
+            precio_unitario = float(row[2])
+            total_producto = float(row[3])
+
+            subtotal += total_producto
+
             productos.append({
                 "nombre": row[0],
-                "cantidad": row[1],
-                "precio_unitario": float(row[2]),
-                "total": float(row[3]),
+                "cantidad": cantidad,
+                "precio_unitario": precio_unitario,
+                "total": total_producto,
                 "imagen_url": row[4]
             })
 
-        # Factura del pedido
-        cursor.execute("""
-            SELECT Subtotal, CostoEnvio, Impuesto, Total
-            FROM Facturas
-            WHERE PedidoID = %s
-        """, (pedido_id,))
+        impuesto = subtotal * 0.15
+        envio = 100.0
+        total = subtotal + impuesto + envio
 
-        factura = cursor.fetchone()
-        factura_info = None
-        if factura:
-            factura_info = {
-                "subtotal": float(factura[0]),
-                "costo_envio": float(factura[1]),
-                "impuesto": float(factura[2]),
-                "total": float(factura[3])
-            }
+        factura_info = {
+            "subtotal": subtotal,
+            "impuesto": impuesto,
+            "envio": envio,
+            "total": total
+        }
 
         return {
             "pedido_id": pedido_info[0],

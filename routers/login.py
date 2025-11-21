@@ -23,7 +23,7 @@ def login(login_data: LoginRequest):
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT UsuarioID, Nombre, Email, RolID
+            SELECT UsuarioID, Nombre, Email,Telefono, RolID
             FROM Usuarios
             WHERE Email = %s AND PasswordHash = %s
         """, (login_data.email, login_data.password))
@@ -35,7 +35,8 @@ def login(login_data: LoginRequest):
                 "usuario_id": user[0],
                 "nombre": user[1],
                 "email": user[2],
-                "rol_id": user[3],
+                "telefono": user[3],
+                "rol_id": user[4],
                 "mensaje": "Login exitoso"
             }
         else:
@@ -57,7 +58,6 @@ def register(register_data: RegisterRequest):
         conn = get_connection()
         cursor = conn.cursor()
 
-        # Comprobar si el email ya existe
         cursor.execute(
             "SELECT UsuarioID FROM Usuarios WHERE Email = %s",
             (register_data.email,)
@@ -66,23 +66,23 @@ def register(register_data: RegisterRequest):
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="El email ya está registrado")
 
-        # Insertar nuevo usuario
+        # Insert del usuario
         cursor.execute("""
             INSERT INTO Usuarios (Nombre, Email, PasswordHash, Telefono, RolID)
-            OUTPUT INSERTED.UsuarioID
             VALUES (%s, %s, %s, %s, 2)
         """, (register_data.nombre, register_data.email, register_data.password, register_data.telefono))
 
+        # Obtener ID generado
+        cursor.execute("SELECT SCOPE_IDENTITY()")
         user_id = cursor.fetchone()[0]
+
         conn.commit()
 
         return {
-            "usuario_id": user_id,
+            "usuario_id": int(user_id),
             "mensaje": "Usuario registrado exitosamente"
         }
 
-    except HTTPException:
-        raise
     except Exception as e:
         if conn:
             conn.rollback()
